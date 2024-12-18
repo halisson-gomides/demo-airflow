@@ -1,5 +1,3 @@
 # Byte-compiled / optimized / DLL files
-__pycache__/
-dags/**
-config/**
-plugins/**
+**/__pycache__/
+logs/**
