@@ -5,8 +5,10 @@ from airflow.decorators import task
 from airflow.utils.dates import days_ago
 import requests
 import json
-# import pandas as pd
-from datetime import datetime
+import pandas as pd
+from typing import List, Dict
+import logging
+
 
 DB_CONN_ID = 'CONN_PG_TRANSFGOV'
 API_CONN_ID = 'CONN_API_TRANSFGOV' 
@@ -46,47 +48,34 @@ with DAG(dag_id='etl_programas_especiais',
         
 
     @task
-    def transform_api_data(api_data):
+    def transform_api_data(api_data: List[Dict]) -> pd.DataFrame:
         """Transformacoes nos dados obtidos via API
 
         Args:
-            api_data (json): Dados obtidos via API
+            api_data (List[Dict]): Dados obtidos via API
         """
-        transformed_data = [
-            {
-                "id_programa": d.get("id_programa"),
-                "ano_programa": d.get("ano_programa"),
-                "modalidade_programa": d.get("modalidade_programa"),
-                "codigo_programa": d.get("codigo_programa"),
-                "id_orgao_superior_programa": d.get("id_orgao_superior_programa"),
-                "sigla_orgao_superior_programa": d.get("sigla_orgao_superior_programa"),
-                "nome_orgao_superior_programa": d.get("nome_orgao_superior_programa"),
-                "id_orgao_programa": d.get("id_orgao_programa"),
-                "sigla_orgao_programa": d.get("sigla_orgao_programa"),
-                "nome_orgao_programa": d.get("nome_orgao_programa"),
-                "id_unidade_gestora_programa": d.get("id_unidade_gestora_programa"),
-                "documentos_origem_programa": d.get("documentos_origem_programa"),
-                "id_unidade_orcamentaria_responsavel_programa": d.get("id_unidade_orcamentaria_responsavel_programa"),
-                "data_inicio_ciencia_programa": datetime.strptime(d.get("data_inicio_ciencia_programa"), '%Y-%m-%d').date(),
-                "data_fim_ciencia_programa": datetime.strptime(d.get("data_fim_ciencia_programa"), '%Y-%m-%d').date(),
-                "valor_necessidade_financeira_programa": float(d.get("valor_necessidade_financeira_programa")) / 100,
-                "valor_total_disponibilizado_programa": float(d.get("valor_total_disponibilizado_programa")) / 100,
-                "valor_impedido_programa": float(d.get("valor_impedido_programa")) / 100,
-                "valor_a_disponibilizar_programa": float(d.get("valor_a_disponibilizar_programa")) / 100,
-                "valor_documentos_habeis_gerados_programa": float(d.get("valor_documentos_habeis_gerados_programa")) / 100,
-                "valor_obs_geradas_programa": float(d.get("valor_obs_geradas_programa")) / 100,
-                "valor_disponibilidade_atual_programa": float(d.get("valor_disponibilidade_atual_programa")) / 100,
-            } for d in api_data
-        ]
-        return transformed_data
+        df = pd.DataFrame(api_data)
+    
+        # Convertendo datas para formato datetime
+        date_columns = ['data_inicio_ciencia_programa', 'data_fim_ciencia_programa']
+        for col in date_columns:
+            df[col] = pd.to_datetime(df[col], format='%Y-%m-%d', errors='coerce')
+        
+        # Arredondando valores monetários para 2 casas decimais
+        value_columns = [col for col in df.columns if 'valor_' in col]
+        for col in value_columns:
+            df[col] = df[col].astype(float).div(100).round(2)
+        
+        logging.info(f"Dados transformados com sucesso. Shape: {df.shape}")
+        return df
     
     
     @task
-    def load_to_database(tranformed_data):
+    def load_to_database(tranformed_data: pd.DataFrame):
         """Carrega os dados da API para o banco Postgres
 
         Args:
-            tranformed_data (list): Lista de dicionarios com os dados retornados via api
+            tranformed_data (pandas DataFrame): dataframe com os dados tranfsormados
         """
         pg_hook = PostgresHook(postgres_conn_id=DB_CONN_ID)
         conn = pg_hook.get_conn()
@@ -94,7 +83,7 @@ with DAG(dag_id='etl_programas_especiais',
 
         # Criação da tabela se não existir
         create_table_sql = """
-        CREATE TABLE IF NOT EXISTS programas_especiais (
+        CREATE TABLE IF NOT EXISTS tab_programas_especiais (
             id_programa INTEGER PRIMARY KEY,
             ano_programa INTEGER,
             modalidade_programa VARCHAR(50),
@@ -124,10 +113,10 @@ with DAG(dag_id='etl_programas_especiais',
             cursor.execute(create_table_sql)
 
             # Inserindo dados
-            for record in tranformed_data:
-                row = tuple(record.values())
+            for _, row in tranformed_data.iterrows():
+                
                 insert_sql = """
-                INSERT INTO programas_especiais VALUES (
+                INSERT INTO tab_programas_especiais VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s
                 )
@@ -155,17 +144,19 @@ with DAG(dag_id='etl_programas_especiais',
                     valor_obs_geradas_programa = EXCLUDED.valor_obs_geradas_programa,
                     valor_disponibilidade_atual_programa = EXCLUDED.valor_disponibilidade_atual_programa
                 """
-                cursor.execute(insert_sql, row)
+                cursor.execute(insert_sql, tuple(row))
         
             conn.commit()
+            logging.info("Dados carregados com sucesso no PostgreSQL")
         except Exception as e:
             conn.rollback()
+            logging.error(f"Erro ao carregar dados no PostgreSQL: {e.__repr__()}")
         finally:
             cursor.close()
             conn.close()
 
 
     ## DAG Worflow- ETL Pipeline
-    api_data= extract_api_data()
-    transformed_data=transform_api_data(api_data)
+    api_data = extract_api_data()
+    transformed_data =transform_api_data(api_data)
     load_to_database(transformed_data)
