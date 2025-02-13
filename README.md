@@ -13,7 +13,7 @@ para o banco de dados externo:<br>
   ` - airflow_network`<br>
   ` - postgres_network`
 
-- No final do arquivo, adicionar a configuração de cada rede:
+- No final do arquivo, adicionar a configuração de cada rede:<br>
 `networks:`<br>
   ` airflow_network:`<br>
     `  driver: bridge`<br>
