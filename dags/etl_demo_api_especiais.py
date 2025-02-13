@@ -14,7 +14,7 @@ DB_CONN_ID = 'CONN_PG_TRANSFGOV'
 API_CONN_ID = 'CONN_API_TRANSFGOV' 
 
 # Argumentos para o Endpoint da API
-ANO = '2024'
+ANO = '2022'
 
 default_args={
     'owner':'airflow',
@@ -36,7 +36,7 @@ with DAG(dag_id='etl_programas_especiais',
         http_hook = HttpHook(http_conn_id=API_CONN_ID, method='GET')
 
         # API Endpoint
-        endpoint = f"/programa_especial?ano_programa=eq. {ANO}&limit=10"
+        endpoint = f"/programa_especial?ano_programa=eq.{ANO}&limit=10"
 
         # Requisição via HTTP Hook
         response = http_hook.run(endpoint)
@@ -65,6 +65,9 @@ with DAG(dag_id='etl_programas_especiais',
         value_columns = [col for col in df.columns if 'valor_' in col]
         for col in value_columns:
             df[col] = df[col].astype(float).div(100).round(2)
+
+        # Substituindo valores NaN or NaT
+        df = df.replace({pd.NA: None})
         
         logging.info(f"Dados transformados com sucesso. Shape: {df.shape}")
         return df
@@ -84,28 +87,28 @@ with DAG(dag_id='etl_programas_especiais',
         # Criação da tabela se não existir
         create_table_sql = """
         CREATE TABLE IF NOT EXISTS tab_programas_especiais (
-            id_programa INTEGER PRIMARY KEY,
-            ano_programa INTEGER,
-            modalidade_programa VARCHAR(50),
-            codigo_programa VARCHAR(20),
-            id_orgao_superior_programa INTEGER,
-            sigla_orgao_superior_programa VARCHAR(10),
-            nome_orgao_superior_programa VARCHAR(100),
-            id_orgao_programa INTEGER,
-            sigla_orgao_programa VARCHAR(10),
-            nome_orgao_programa VARCHAR(100),
-            id_unidade_gestora_programa INTEGER,
-            documentos_origem_programa VARCHAR(100),
-            id_unidade_orcamentaria_responsavel_programa INTEGER,
-            data_inicio_ciencia_programa TIMESTAMP,
-            data_fim_ciencia_programa TIMESTAMP,
-            valor_necessidade_financeira_programa NUMERIC(15,2),
-            valor_total_disponibilizado_programa NUMERIC(15,2),
-            valor_impedido_programa NUMERIC(15,2),
-            valor_a_disponibilizar_programa NUMERIC(15,2),
-            valor_documentos_habeis_gerados_programa NUMERIC(15,2),
-            valor_obs_geradas_programa NUMERIC(15,2),
-            valor_disponibilidade_atual_programa NUMERIC(15,2)
+            id_programa INTEGER PRIMARY KEY NOT NULL,
+            ano_programa INTEGER NULL,
+            modalidade_programa VARCHAR(50) NULL,
+            codigo_programa VARCHAR(20) NULL,
+            id_orgao_superior_programa INTEGER NULL,
+            sigla_orgao_superior_programa VARCHAR(10) NULL,
+            nome_orgao_superior_programa VARCHAR(100) NULL,
+            id_orgao_programa INTEGER NULL,
+            sigla_orgao_programa VARCHAR(10) NULL,
+            nome_orgao_programa VARCHAR(100) NULL,
+            id_unidade_gestora_programa INTEGER NULL,
+            documentos_origem_programa VARCHAR(100) NULL,
+            id_unidade_orcamentaria_responsavel_programa INTEGER NULL,
+            data_inicio_ciencia_programa TIMESTAMP NULL,
+            data_fim_ciencia_programa TIMESTAMP NULL,
+            valor_necessidade_financeira_programa NUMERIC(15,2) NULL,
+            valor_total_disponibilizado_programa NUMERIC(15,2) NULL,
+            valor_impedido_programa NUMERIC(15,2) NULL,
+            valor_a_disponibilizar_programa NUMERIC(15,2) NULL,
+            valor_documentos_habeis_gerados_programa NUMERIC(15,2) NULL,
+            valor_obs_geradas_programa NUMERIC(15,2) NULL,
+            valor_disponibilidade_atual_programa NUMERIC(15,2) NULL
         );
         """
         try:
@@ -151,6 +154,7 @@ with DAG(dag_id='etl_programas_especiais',
         except Exception as e:
             conn.rollback()
             logging.error(f"Erro ao carregar dados no PostgreSQL: {e.__repr__()}")
+            raise
         finally:
             cursor.close()
             conn.close()
