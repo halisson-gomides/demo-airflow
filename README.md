@@ -9,17 +9,17 @@ Demonstração de uso do orquestrador Apache Airflow
 - Modifique o `docker-compose.yaml`, comentando a linha `image` e descomentando a linha `build: .`
 - Adicione a seção `networks` em cada serviço do airflow com as entradas para uma rede airflow e outra 
 para o banco de dados externo:
->networks:<br>
->   - airflow_network<br>
->   - postgres_network
+`networks:`<br>
+  ` - airflow_network`<br>
+  ` - postgres_network`
 
 - No final do arquivo, adicionar a configuração de cada rede:
->networks:<br>
->   airflow_network:<br>
->      driver: bridge<br>
->   postgres_network:<br>
->      name: app_network<br>
->      external: true
+`networks:`<br>
+  ` airflow_network:`<br>
+    `  driver: bridge`<br>
+  ` postgres_network:`<br>
+    `  name: app_network`<br>
+    `  external: true`
 
 
 - Rodar o comando: `docker compose up --build -d` 
