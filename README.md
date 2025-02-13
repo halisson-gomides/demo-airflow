@@ -8,7 +8,7 @@ Demonstração de uso do orquestrador Apache Airflow
 - Dentro do arquivo `docker-compose.yaml`, criar a variável `AIRFLOW__CORE__TEST_CONNECTION: 'Enabled'`
 - Modifique o `docker-compose.yaml`, comentando a linha `image` e descomentando a linha `build: .`
 - Adicione a seção `networks` em cada serviço do airflow com as entradas para uma rede airflow e outra 
-para o banco de dados externo:
+para o banco de dados externo:<br>
 `networks:`<br>
   ` - airflow_network`<br>
   ` - postgres_network`
